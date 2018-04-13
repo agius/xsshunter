@@ -27,6 +27,7 @@ from models.collected_page import CollectedPage
 from binascii import a2b_base64
 
 LOG_PREFIX = os.environ.get('LOG_PREFIX', None)
+FORCE_SSL = os.environ.get('FORCE_SSL', False)
 
 if LOG_PREFIX:
     logfile = LOG_PREFIX + '/detailed.log'
