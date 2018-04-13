@@ -5,6 +5,7 @@ import tornado.template
 import dns.resolver
 import yaml
 import os
+import re
 
 try:
     with open( '../config.yaml', 'r' ) as f:
@@ -35,8 +36,15 @@ class BaseHandler(tornado.web.RequestHandler):
         if x_foward_proto:
             is_http = x_foward_proto == "http"
 
+        url = self.request.full_url()[len("http://"):]
+
         if(FORCE_SSL and is_http):
-            self.redirect("https://%s" % self.request.full_url()[len("http://"):], permanent=True)
+            return self.redirect("https://{0}".format(url), permanent=True)
+
+        pattern = r'^{0}\b'.format(DOMAIN)
+        if re.search(pattern, self.request.host):
+            use_ssl = 's' if FORCE_SSL or not is_http else ''
+            return self.redirect("http{0}://www.{1}".format(use_ssl, url), permanent=True)
 
     def compute_etag( self ):
         return None
@@ -48,10 +56,15 @@ class BaseStatic(tornado.web.StaticFileHandler):
         if x_foward_proto:
             is_http = x_foward_proto == "http"
 
+        url = self.request.full_url()[len("http://"):]
+
         if(FORCE_SSL and is_http):
-            self.redirect("https://%s" % self.request.full_url()[len("http://"):], permanent=True)
-        else:
-            super(BaseStatic, self)
+            return self.redirect("https://{0}".format(url), permanent=True)
+
+        pattern = r'^{0}\b'.format(DOMAIN)
+        if re.search(pattern, self.request.host):
+            use_ssl = 's' if FORCE_SSL or not is_http else ''
+            return self.redirect("http{0}://www.{1}".format(use_ssl, url), permanent=True)
 
 class XSSHunterApplicationHandler(BaseHandler):
     def get(self):

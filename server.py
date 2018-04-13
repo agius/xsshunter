@@ -26,8 +26,9 @@ def init_logger(log):
 
 def make_app():
     return tornado.web.Application([
-        tornado.routing.Rule(tornado.routing.HostMatches(API_DOMAIN), API_APP),
-        tornado.routing.Rule(tornado.routing.HostMatches(DOMAIN), GUI_APP)
+        tornado.routing.Rule(tornado.routing.HostMatches("www." + DOMAIN), GUI_APP),
+        tornado.routing.Rule(tornado.routing.HostMatches(DOMAIN), GUI_APP),
+        tornado.routing.Rule(tornado.routing.AnyMatches(), API_APP)
     ])
 
 if __name__ == "__main__":
