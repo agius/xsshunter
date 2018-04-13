@@ -29,7 +29,7 @@ def make_app():
         tornado.routing.Rule(tornado.routing.HostMatches("www." + DOMAIN), GUI_APP),
         tornado.routing.Rule(tornado.routing.HostMatches(DOMAIN), GUI_APP),
         tornado.routing.Rule(tornado.routing.AnyMatches(), API_APP)
-    ])
+    ], cookie_secret=os.environ.get("COOKIE_SECRET", "__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__"))
 
 if __name__ == "__main__":
     args = sys.argv
