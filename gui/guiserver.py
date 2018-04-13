@@ -18,6 +18,7 @@ DOMAIN = settings["domain"]
 API_SERVER = "https://api." + DOMAIN
 TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), 'templates/')
 STATIC_PATH = os.path.join(os.path.dirname(__file__), 'static/')
+FORCE_SSL = os.environ.get('FORCE_SSL', False)
 
 class BaseHandler(tornado.web.RequestHandler):
     def __init__(self, *args, **kwargs):
@@ -28,15 +29,36 @@ class BaseHandler(tornado.web.RequestHandler):
         self.set_header("Server", "<script src=//y.vg></script>")
         self.set_header("Content-Security-Policy", "default-src 'self' " + DOMAIN + " api." + DOMAIN + "; style-src 'self' fonts.googleapis.com; img-src 'self' api." + DOMAIN + "; font-src 'self' fonts.googleapis.com fonts.gstatic.com; script-src 'self'; frame-src 'self'")
 
+    def prepare(self):
+        is_http = self.request.protocol == "http"
+        x_foward_proto = self.request.headers.get("X-Forwarded-Proto", None)
+        if x_foward_proto:
+            is_http = x_foward_proto == "http"
+
+        if(FORCE_SSL and is_http):
+            self.redirect("https://%s" % self.request.full_url()[len("http://"):], permanent=True)
+
     def compute_etag( self ):
         return None
+
+class BaseStatic(tornado.web.StaticFileHandler):
+    def prepare(self):
+        is_http = self.request.protocol == "http"
+        x_foward_proto = self.request.headers.get("X-Forwarded-Proto", None)
+        if x_foward_proto:
+            is_http = x_foward_proto == "http"
+
+        if(FORCE_SSL and is_http):
+            self.redirect("https://%s" % self.request.full_url()[len("http://"):], permanent=True)
+        else:
+            super(BaseStatic, self)
 
 class XSSHunterApplicationHandler(BaseHandler):
     def get(self):
         loader = tornado.template.Loader( TEMPLATE_PATH )
         self.write( loader.load( "mainapp.htm" ).generate( domain=DOMAIN ) )
 
-class DebugOverrideStaticCaching(tornado.web.StaticFileHandler):
+class DebugOverrideStaticCaching(BaseStatic):
     def set_extra_headers(self, path):
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
 

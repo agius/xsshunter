@@ -83,6 +83,15 @@ class BaseHandler(tornado.web.RequestHandler):
             self.finish()
             return
 
+    def prepare(self):
+        is_http = self.request.protocol == "http"
+        x_foward_proto = self.request.headers.get("X-Forwarded-Proto", None)
+        if x_foward_proto:
+            is_http = x_foward_proto == "http"
+
+        if(FORCE_SSL and is_http):
+            self.redirect("https://%s" % self.request.full_url()[len("http://"):], permanent=True)
+
     def logit( self, message, message_type="info" ):
         user_id = self.get_secure_cookie( "user" )
         if user_id != None:
