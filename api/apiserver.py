@@ -179,6 +179,16 @@ def data_uri_to_file( data_uri ):
 def pprint( input_dict ):
     print json.dumps(input_dict, sort_keys=True, indent=4, separators=(',', ': '))
 
+class UploadHandler(BaseHandler):
+    def get( self ):
+        user = self.get_authenticated_user()
+        inj = session.query( InjectionRequest ).filter_by( owner_id = user.id ).filter_by( screenshot = self.request.path ).one_or_none()
+        if ( inj == None ):
+            return self.throw_404()
+        raw = data_uri_to_file(inj.screenshot_data)
+        self.write(raw)
+        self.finish()
+
 class GetXSSPayloadFiresHandler(BaseHandler):
     """
     Endpoint for querying for XSS payload fire data.
@@ -209,16 +219,8 @@ class GetXSSPayloadFiresHandler(BaseHandler):
         }
         self.write( json.dumps( return_dict ) )
 
-def upload_screenshot( base64_screenshot_data_uri ):
-    screenshot_filename = "uploads/xsshunter_screenshot_" + binascii.hexlify( os.urandom( 100 ) ) + ".png"
-    screenshot_file_handler = data_uri_to_file( base64_screenshot_data_uri )
-    local_file_handler = open( screenshot_filename, "w" ) # Async IO http://stackoverflow.com/a/13644499/1195812
-    local_file_handler.write( screenshot_file_handler.read() )
-    local_file_handler.close()
-    return screenshot_filename
-
 def record_callback_in_database( callback_data, request_handler ):
-    screenshot_file_path = upload_screenshot( callback_data["screenshot"] )
+    screenshot_file_path = "uploads/xsshunter_screenshot_" + binascii.hexlify( os.urandom( 100 ) ) + ".png"
 
     injection = Injection( vulnerable_page=callback_data["uri"].encode("utf-8"),
         victim_ip=callback_data["ip"].encode("utf-8"),
@@ -229,7 +231,8 @@ def record_callback_in_database( callback_data, request_handler ):
         origin=callback_data["origin"].encode("utf-8"),
         screenshot=screenshot_file_path.encode("utf-8"),
         injection_timestamp=int(time.time()),
-        browser_time=int(callback_data["browser-time"])
+        browser_time=int(callback_data["browser-time"]),
+        screenshot_data=callback_data["screenshot"]
     )
     injection.generate_injection_id()
     owner_user = request_handler.get_user_from_subdomain()
@@ -526,8 +529,6 @@ class DeleteInjectionHandler(BaseHandler):
 
         self.logit( "User delted injection record with an id of " + injection_db_record.id + "(" + injection_db_record.vulnerable_page + ")")
 
-        os.remove( injection_db_record.screenshot )
-
         injection_db_record = session.query( Injection ).filter_by( id=str( delete_data.get( "id" ) ) ).delete()
         session.commit()
 
@@ -693,7 +694,7 @@ def make_app():
         (r"/js_callback", CallbackHandler),
         (r"/page_callback", CollectPageHandler),
         (r"/health", HealthHandler),
-        (r"/uploads/(.*)", tornado.web.StaticFileHandler, {"path": "uploads/"}),
+        (r"/uploads/(.*)", UploadHandler),
         (r"/api/record_injection", InjectionRequestHandler),
         (r"/(.*)", HomepageHandler),
     ], cookie_secret=settings["cookie_secret"])

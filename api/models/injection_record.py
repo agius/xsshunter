@@ -20,6 +20,7 @@ class Injection(Base):
     owner_id = Column(String(100))
     browser_time = Column(BigInteger())
     correlated_request = Column(Text())
+    screenshot_data = Column(Text())
 
     def generate_injection_id( self ):
         self.id = binascii.hexlify(os.urandom(50))
