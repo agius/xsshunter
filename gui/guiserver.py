@@ -4,13 +4,20 @@ import tornado.web
 import tornado.template
 import dns.resolver
 import yaml
+import os
 
 try:
     with open( '../config.yaml', 'r' ) as f:
         settings = yaml.safe_load( f )
 except IOError:
-    print "Error reading config.yaml, have you created one? (Hint: Try running ./generate_config.py)"
-    exit()
+    settings = {
+        "domain": os.environ.get('DOMAIN', 'fakedomain.com')
+    }
+
+DOMAIN = settings["domain"]
+API_SERVER = "https://api." + DOMAIN
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), 'templates/')
+STATIC_PATH = os.path.join(os.path.dirname(__file__), 'static/')
 
 class BaseHandler(tornado.web.RequestHandler):
     def __init__(self, *args, **kwargs):
@@ -26,7 +33,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
 class XSSHunterApplicationHandler(BaseHandler):
     def get(self):
-        loader = tornado.template.Loader( "templates/" )
+        loader = tornado.template.Loader( TEMPLATE_PATH )
         self.write( loader.load( "mainapp.htm" ).generate( domain=DOMAIN ) )
 
 class DebugOverrideStaticCaching(tornado.web.StaticFileHandler):
@@ -35,22 +42,22 @@ class DebugOverrideStaticCaching(tornado.web.StaticFileHandler):
 
 class HomepageHandler(BaseHandler):
     def get(self):
-        loader = tornado.template.Loader( "templates/" )
+        loader = tornado.template.Loader( TEMPLATE_PATH )
         self.write( loader.load( "homepage.htm" ).generate() )
 
 class FeaturesHandler(BaseHandler):
     def get(self):
-        loader = tornado.template.Loader( "templates/" )
+        loader = tornado.template.Loader( TEMPLATE_PATH )
         self.write( loader.load( "features.htm" ).generate( domain=DOMAIN ) )
 
 class SignUpHandler(BaseHandler):
     def get(self):
-        loader = tornado.template.Loader( "templates/" )
+        loader = tornado.template.Loader( TEMPLATE_PATH )
         self.write( loader.load( "signup.htm" ).generate( domain=DOMAIN ) )
 
 class ContactHandler(BaseHandler):
     def get(self):
-        loader = tornado.template.Loader( "templates/" )
+        loader = tornado.template.Loader( TEMPLATE_PATH )
         self.write( loader.load( "contact.htm" ).generate() )
 
 def make_app():
@@ -60,12 +67,10 @@ def make_app():
         (r"/features", FeaturesHandler),
         (r"/signup", SignUpHandler),
         (r"/contact", ContactHandler),
-        (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": "static/"}),
+        (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": STATIC_PATH }),
     ])
 
 if __name__ == "__main__":
-    DOMAIN = settings["domain"]
-    API_SERVER = "https://api." + DOMAIN
     app = make_app()
     app.listen( 1234 )
     tornado.ioloop.IOLoop.current().start()

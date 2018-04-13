@@ -26,19 +26,31 @@ from models.request_record import InjectionRequest
 from models.collected_page import CollectedPage
 from binascii import a2b_base64
 
-logging.basicConfig(filename="logs/detailed.log",level=logging.DEBUG)
+LOG_PREFIX = os.environ.get('LOG_PREFIX', None)
+
+if LOG_PREFIX:
+    logfile = LOG_PREFIX + '/detailed.log'
+    logging.basicConfig(filename=logfile,level=logging.DEBUG)
 
 try:
     with open( '../config.yaml', 'r' ) as f:
         settings = yaml.safe_load( f )
 except IOError:
-    print "Error reading config.yaml, have you created one? (Hint: Try running ./generate_config.py)"
-    exit()
+    settings = {
+        "domain": os.environ.get('DOMAIN', 'fakedomain.com'),
+        "email_from": os.environ.get('EMAIL_FROM', 'admin@fakedomain.com'),
+        "mailgun_sending_domain": os.environ.get('MAILGUN_DOMAIN', 'fakedomain.com'),
+        "mailgun_api_key": os.environ.get('MAILGUN_API_KEY', None),
+        "abuse_email": os.environ.get('ABUSE_EMAIL', 'admin@fakedomain.com'),
+        "cookie_secret": os.environ.get('COOKIE_SECRET')
+    }
 
 CSRF_EXEMPT_ENDPOINTS = [ "/api/contactus", "/api/register", "/", "/api/login", "/health", "/favicon.ico", "/page_callback", "/api/record_injection" ]
 FORBIDDEN_SUBDOMAINS = [ "www", "api" ]
 
-with open( "probe.js", "r" ) as probe_handler:
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), 'templates/')
+
+with open( os.path.join(os.path.dirname(__file__), 'probe.js'), "r" ) as probe_handler:
     probejs = probe_handler.read()
 
 class BaseHandler(tornado.web.RequestHandler):
@@ -251,7 +263,7 @@ def send_javascript_pgp_encrypted_callback_message( email_data, email ):
     return send_email( email, "[XSS Hunter] XSS Payload Message (PGP Encrypted)", email_data, False, "text" )
 
 def send_javascript_callback_message( email, injection_db_record ):
-    loader = tornado.template.Loader( "templates/" )
+    loader = tornado.template.Loader( TEMPLATE_PATH )
 
     injection_data = injection_db_record.get_injection_blob()
 
@@ -434,7 +446,8 @@ class HomepageHandler(BaseHandler):
         new_probe = new_probe.replace( '[COLLECT_PAGE_LIST_REPLACE_ME]', json.dumps( user.get_page_collection_path_list() ) )
 
         if user.pgp_key != "":
-            with open( "templates/pgp_encrypted_template.txt", "r" ) as template_handler:
+            encrypt_path = os.path.join(os.path.dirname(__file__), 'templates', 'pgp_encrypted_template.txt')
+            with open( encrypt_path, "r" ) as template_handler:
                 new_probe = new_probe.replace( '[TEMPLATE_REPLACE_ME]', json.dumps( template_handler.read() ))
         else:
             new_probe = new_probe.replace( '[TEMPLATE_REPLACE_ME]', json.dumps( "" ))
@@ -674,6 +687,9 @@ def make_app():
         (r"/api/record_injection", InjectionRequestHandler),
         (r"/(.*)", HomepageHandler),
     ], cookie_secret=settings["cookie_secret"])
+
+def create_all():
+    Base.metadata.create_all(engine)
 
 if __name__ == "__main__":
     args = sys.argv
