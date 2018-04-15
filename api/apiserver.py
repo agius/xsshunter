@@ -78,9 +78,10 @@ class BaseHandler(tornado.web.RequestHandler):
 
         self.request.remote_ip = self.request.headers.get( "X-Forwarded-For" )
 
-        if not self.validate_csrf_token() and self.request.uri not in CSRF_EXEMPT_ENDPOINTS and not self.request.uri.startswith( "/b" ):
+        if not self.validate_csrf_token() and self.request.uri not in CSRF_EXEMPT_ENDPOINTS and not self.request.uri.startswith( "/b" ) and not self.request.uri.startswith( "/uploads/" ):
             self.error( "Invalid CSRF token provided!" )
             self.logit( "Someone did a request with an invalid CSRF token!", "warn")
+            self.write( "" )
             self.finish()
             return
 
@@ -173,6 +174,7 @@ def data_uri_to_file( data_uri ):
     """
     raw_base64 = data_uri.replace( 'data:image/png;base64,', '' )
     binary_data = a2b_base64( raw_base64 )
+    return binary_data
     f = io.BytesIO( binary_data )
     return f
 
@@ -180,14 +182,20 @@ def pprint( input_dict ):
     print json.dumps(input_dict, sort_keys=True, indent=4, separators=(',', ': '))
 
 class UploadHandler(BaseHandler):
-    def get( self ):
+    def get( self, path ):
         user = self.get_authenticated_user()
-        inj = session.query( InjectionRequest ).filter_by( owner_id = user.id ).filter_by( screenshot = self.request.path ).one_or_none()
+        upload_path = self.request.path[1:]
+        inj = session.query( Injection ).filter_by( owner_id = user.id ).filter_by( screenshot = upload_path ).one_or_none()
         if ( inj == None ):
+            self.logit( "no screenshot found for: " + self.request.path )
             return self.throw_404()
-        raw = data_uri_to_file(inj.screenshot_data)
-        self.write(raw)
-        self.finish()
+        else:
+            self.logit( "returning screenshot: " + inj.screenshot + " for request: " + self.request.path )
+            raw = data_uri_to_file(inj.screenshot_data)
+            self.set_header('Content-type', 'image/jpg')
+            self.set_header('Content-length', len(raw))
+            self.write(raw)
+            self.finish()
 
 class GetXSSPayloadFiresHandler(BaseHandler):
     """
